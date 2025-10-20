@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  storage-service:
+    build: ./storage-service
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./storage-service/chat_history.db:/app/chat_history.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  chat-service:
+    build: ./chat-service
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - STORAGE_SERVICE_URL=http://storage-service:8002
+      - MODEL=gpt-5-mini
+    depends_on:
+      - storage-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_CHAT_SERVICE_URL=http://localhost:8001
+      - NEXT_PUBLIC_STORAGE_SERVICE_URL=http://localhost:8002
+    depends_on:
+      - chat-service
+      - storage-service
