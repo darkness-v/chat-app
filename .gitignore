@@ -86,6 +86,9 @@ coverage.xml
 chat_history.db
 conversations.db
 
+storage-service/uploads/*
+!storage-service/uploads/.gitkeep
+
 .uv/
 uv.lock
 
@@ -96,5 +99,8 @@ temp/
 *.bak
 *.backup
 *~
+
+# Service management
+.service-pids
 
 docker-compose.override.yml

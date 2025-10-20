@@ -3,6 +3,7 @@ export interface Message {
   conversation_id: number;
   role: 'user' | 'assistant';
   content: string;
+  image_url?: string;  
   timestamp: string;
 }
 

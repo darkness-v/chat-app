@@ -1,12 +1,19 @@
 [project]
 name = "storage-service"
 version = "1.0.0"
-description = "Storage service for chat application"
+description = "Storage service for chat application with image upload support"
 requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "MIT"}
 dependencies = [
-    "fastapi>=0.104.1",
-    "uvicorn>=0.24.0",
-    "sqlalchemy>=2.0.23",
-    "python-dotenv>=1.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "sqlalchemy>=2.0.35",
+    "python-dotenv>=1.0.1",
     "pydantic>=2.5.0",
+    "python-multipart>=0.0.6",
+    "aiofiles>=23.2.1",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]

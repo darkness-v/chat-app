@@ -22,6 +22,7 @@ class Message(Base):
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
     role = Column(String(50), nullable=False)
     content = Column(Text, nullable=False)
+    image_url = Column(String(500), nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     
     conversation = relationship("Conversation", back_populates="messages")

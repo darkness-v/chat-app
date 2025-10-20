@@ -1,9 +1,12 @@
 import { Message } from '@/types';
 import { format } from 'date-fns';
+import Image from 'next/image';
 
 interface ChatMessageProps {
   message: Message;
 }
+
+const STORAGE_SERVICE_URL = process.env.NEXT_PUBLIC_STORAGE_SERVICE_URL || 'http://localhost:8002';
 
 export default function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
@@ -29,6 +32,16 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               : 'bg-gray-100 text-gray-800'
           }`}
         >
+          {/* Display image if present */}
+          {message.image_url && (
+            <div className="mb-3">
+              <img 
+                src={`${STORAGE_SERVICE_URL}${message.image_url}`}
+                alt="Uploaded image"
+                className="max-w-full rounded-lg max-h-64 object-contain"
+              />
+            </div>
+          )}
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         </div>
         <div className={`text-xs text-gray-400 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>

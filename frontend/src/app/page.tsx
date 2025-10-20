@@ -56,13 +56,39 @@ export default function Home() {
     }
   };
 
-  const handleSendMessage = async (content: string) => {
-    if (!conversationId || !content.trim()) return;
+  const handleSendMessage = async (content: string, imageFile?: File) => {
+    if (!conversationId || (!content.trim() && !imageFile)) return;
+
+    let imageUrl: string | undefined;
+    
+    if (imageFile) {
+      try {
+        const formData = new FormData();
+        formData.append('file', imageFile);
+        
+        const uploadResponse = await fetch(`${STORAGE_SERVICE_URL}/api/upload-image`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to upload image');
+        }
+        
+        const uploadData = await uploadResponse.json();
+        imageUrl = uploadData.image_url;
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        alert('Failed to upload image. Please try again.');
+        return;
+      }
+    }
 
     const userMessage: Message = {
       id: Date.now(),
       role: 'user',
-      content: content.trim(),
+      content: content.trim() || '(Image)',
+      image_url: imageUrl,
       timestamp: new Date().toISOString(),
       conversation_id: conversationId,
     };
@@ -77,7 +103,8 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversation_id: conversationId,
-          message: content.trim(),
+          message: content.trim() || 'What is in this image?',
+          image_url: imageUrl,
         }),
       });
 
@@ -121,7 +148,6 @@ export default function Home() {
 
               if (data.done) {
                 setIsStreaming(false);
-                // Reload messages to get the final saved version
                 await loadMessages(conversationId);
                 break;
               }

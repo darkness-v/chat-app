@@ -5,6 +5,7 @@ from typing import List, Optional
 class MessageBase(BaseModel):
     role: str
     content: str
+    image_url: Optional[str] = None
 
 class MessageCreate(MessageBase):
     pass
