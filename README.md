@@ -1,16 +1,6 @@
 # Lightweight Multi-Turn Chat Application
 
-A microservice-based chat application with persistent conversation history, streaming support, and **ChatGPT-like conversation management**.
-
-## 🆕 NEW: Conversation Management (October 2025)
-Your app now has a **sidebar with conversation list**! Just like ChatGPT, you can:
-- 📝 Create multiple conversations
-- 🔄 Switch between conversations
-- 🗑️ Delete old conversations
-- ✨ Auto-generated titles from first message
-- 📱 Mobile-responsive sidebar
-
-**[→ Quick Start Guide](./CONVERSATION_QUICKSTART.md)** | **[→ Full Documentation](./DOCS_INDEX_CONVERSATIONS.md)**
+A production-ready microservice-based chat application with persistent conversation history, streaming support, and **ChatGPT-like conversation management**.
 
 ## Architecture
 
@@ -20,18 +10,15 @@ Your app now has a **sidebar with conversation list**! Just like ChatGPT, you ca
 3. **Frontend Service** (Port 3000) - React/Next.js UI with conversation sidebar
 
 ## Features
-- ✅ **Multi-conversation management (NEW!)**
-- ✅ **Conversation sidebar with list (NEW!)**
-- ✅ **Auto-generated titles (NEW!)**
-- ✅ Multi-turn conversation history
-- ✅ Message persistence with timestamps
-- ✅ Streaming responses with loading states
-- ✅ User/Assistant message differentiation
-- ✅ **Image upload and chat (PNG/JPG/JPEG)**
-- ✅ **CSV data analysis with plots**
-- ✅ **Image preview in conversation**
-- ✅ **GPT-4 Vision integration**
-- ✅ Clean, modern UI with responsive design
+- ✅ **Multi-conversation management** - Create, switch, and delete conversations
+- ✅ **Conversation sidebar** - ChatGPT-like interface with conversation list
+- ✅ **Auto-generated titles** - Intelligent conversation naming
+- ✅ **Multi-turn conversation history** - Persistent conversation tracking
+- ✅ **Streaming responses** - Real-time AI responses with loading states
+- ✅ **Image upload and chat** - PNG/JPG/JPEG support with GPT-4 Vision
+- ✅ **CSV data analysis** - Upload CSV files for AI-powered analysis with plots
+- ✅ **Message feedback** - Like/dislike assistant responses
+- ✅ **Clean, modern UI** - Responsive design with Tailwind CSS
 
 ## Tech Stack
 - **Backend**: FastAPI, SQLAlchemy, SQLite, UV (package manager)
@@ -49,11 +36,11 @@ Your app now has a **sidebar with conversation list**! Just like ChatGPT, you ca
 ### One-Command Setup
 
 ```bash
-# Clone and navigate to the project
+# Navigate to the project
 cd chat-app
 
-# Run setup script (installs UV if needed)
-./setup-uv.sh
+# Run setup script
+./setup.sh
 
 # Update your OpenAI API key
 nano chat-service/.env
@@ -126,129 +113,71 @@ npm run dev
 
 ## Usage
 
+### Text Chat
 1. Open http://localhost:3000
-2. **Text Chat**: Type a message and press Enter or click Send
-3. **Image Chat**: 
-   - Click the 📷 image icon to upload an image
-   - Preview appears with × button to remove
-   - Add a message or leave blank (defaults to "What is in this image?")
-   - Click Send
-   - AI analyzes the image using GPT-4 Vision
-4. Images and messages appear in conversation history
-5. All conversations are automatically saved
+2. Type a message and press Enter or click Send
+3. AI responds with streaming responses
+4. All conversations are automatically saved
 
-## Image Chat Features
+### Image Chat
+1. Click the 📷 image icon to upload an image (PNG, JPG, JPEG)
+2. Preview appears with × button to remove
+3. Add a message or leave blank (defaults to "What is in this image?")
+4. Click Send - AI analyzes using GPT-4 Vision
+5. Images are included in conversation context for follow-up questions
 
-- **Supported formats**: PNG, JPG, JPEG
-- **Preview**: See your image before sending
-- **Vision AI**: Powered by GPT-4o
-- **Multi-turn**: Images are included in conversation context
-- **Persistent**: Images stored locally in storage-service/uploads/
+### CSV Data Analysis
+1. Click the 📊 CSV icon to upload a CSV file
+2. AI can analyze data, create plots, and answer questions
+3. Python code is executed in a sandboxed environment
+4. Visualizations are generated automatically using matplotlib/seaborn
+5. All plots are displayed inline with the conversation
 
-## API Endpoints
+### Conversation Management
+1. Create new conversations with the "New Chat" button
+2. Switch between conversations in the sidebar
+3. Delete conversations with the trash icon
+4. Conversations are auto-titled based on the first message
 
-### Chat Service (8001)
-- `POST /api/chat/stream` - Stream chat responses (supports image_url)
-- `POST /api/chat` - Non-streaming endpoint
-- `GET /health` - Health check
-
-### Storage Service (8002)
-- `POST /api/conversations` - Create conversation
-- `GET /api/conversations/{id}` - Get conversation
-- `POST /api/conversations/{id}/messages` - Add message (supports image_url)
-- `GET /api/conversations/{id}/messages` - Get messages
-- `POST /api/upload-image` - Upload image file
-- `GET /uploads/{filename}` - Serve uploaded images
-- `GET /health` - Health check
 
 ## Project Structure
 
 ```
 chat-app/
-├── setup-uv.sh              # Automated setup with UV
-├── start-services.sh        # Start all services
-├── stop-services.sh         # Stop all services
-├── IMAGE_CHAT_GUIDE.md      # Detailed image chat documentation
-├── storage-service/         # Persistence & image storage
-│   ├── main.py
-│   ├── models.py           # Added image_url field
-│   ├── pyproject.toml      # UV configuration
-│   ├── migrate_db.py       # Database migration
-│   └── uploads/            # Uploaded images
-├── chat-service/           # AI chat logic
-│   ├── main.py            # Vision API support
-│   └── pyproject.toml     # UV configuration
-└── frontend/              # Next.js UI
+├── setup.sh                 
+├── start-services.sh      
+├── stop-services.sh       
+├── storage-service/         
+│   ├── main.py             
+│   ├── models.py           
+│   ├── schemas.py          
+│   ├── database.py         
+│   ├── pyproject.toml     
+│   └── uploads/            
+├── chat-service/           
+│   ├── main.py           
+│   ├── code_executor.py    
+│   ├── data_analysis_agent.py  
+│   └── pyproject.toml      
+└── frontend/              
     ├── src/
     │   ├── components/
-    │   │   ├── ChatInput.tsx    # Image upload UI
-    │   │   └── ChatMessage.tsx  # Image display
-    │   └── app/
-    │       └── page.tsx         # Main chat page
+    │   │   ├── ChatInput.tsx    
+    │   │   ├── ChatMessage.tsx  
+    │   │   ├── CSVUpload.tsx    
+    │   │   └── Sidebar.tsx     
+    │   ├── app/
+    │   │   └── page.tsx     
+    │   └── types/
+    │       └── index.ts        
     └── package.json
 ```
+## Demo
 
-## Environment Management with UV
+Watch a demonstration of the application in action:
 
-This project uses [UV](https://github.com/astral-sh/uv) for fast, reliable Python package management:
+🎥 [View Demo Video](https://drive.google.com/file/d/1kSv-o7igU78u1z-6W5eYmOWXkPyNCoqn/view?usp=sharing)
 
-- **Fast**: 10-100x faster than pip
-- **Reliable**: Deterministic dependency resolution
-- **Simple**: Drop-in replacement for pip/venv
+*Note: Click the link to open the video in Google Drive*
 
-### UV Commands
 
-```bash
-# Install dependencies
-uv pip install -e .
-
-# Run Python scripts
-uv run python script.py
-
-# Run services
-uv run uvicorn main:app --port 8001
-
-# Add new dependency
-uv pip install package-name
-```
-
-## Database Migration
-
-If upgrading from a version without image support:
-
-```bash
-cd storage-service
-uv run python migrate_db.py
-```
-
-## Troubleshooting
-
-### Images not uploading
-- Check `storage-service/uploads/` directory exists
-- Verify `python-multipart` is installed: `uv pip list | grep multipart`
-
-### Vision API errors
-- Ensure using `gpt-4o` or `gpt-4o-mini` model
-- Verify OpenAI API key has vision access
-- Check image URL is accessible
-
-### Services won't start
-- Check ports 8001, 8002, 3000 are not in use
-- View logs in `logs/` directory
-- Verify `.env` files are configured
-
-### UV issues
-- Reinstall: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- Update: `uv self update`
-
-## Documentation
-
-- [IMAGE_CHAT_GUIDE.md](./IMAGE_CHAT_GUIDE.md) - Detailed image chat documentation
-- [UV_GUIDE.md](./UV_GUIDE.md) - UV package manager guide
-
-## Cost Considerations
-
-- **Text-only**: ~$0.15 per 1M tokens (gpt-4o-mini)
-- **Vision**: ~$2.50 per 1M tokens + $0.001275 per image (gpt-4o)
-
-Consider monitoring usage and setting limits.

@@ -73,7 +73,7 @@ async def save_message(conversation_id: int, role: str, content: str, image_url:
             )
             response.raise_for_status()
         except Exception as e:
-            print(f"Error saving message: {e}")
+            pass  # Silently fail, message saving is not critical for streaming
 
 async def get_image_as_base64(image_url: str) -> str:
     """Download image from storage service and convert to base64 data URL"""
@@ -92,7 +92,6 @@ async def get_image_as_base64(image_url: str) -> str:
             
             return data_url
         except Exception as e:
-            print(f"Error fetching image: {e}")
             raise
 
 async def get_conversation_history(conversation_id: int) -> List[dict]:
@@ -119,33 +118,26 @@ async def get_conversation_history(conversation_id: int) -> List[dict]:
                                 {"type": "image_url", "image_url": {"url": image_data_url}}
                             ]
                         })
-                    except Exception as e:
-                        print(f"Error converting image to base64: {e}")
+                    except Exception:
                         # Fallback: just send text without image
                         formatted_messages.append({"role": msg["role"], "content": msg["content"]})
                 else:
                     # Regular text message
                     formatted_messages.append({"role": msg["role"], "content": msg["content"]})
             return formatted_messages
-        except Exception as e:
-            print(f"Error getting conversation history: {e}")
+        except Exception:
             return []
 
 async def stream_chat_response(conversation_id: int, user_message: str, model: str, image_url: Optional[str] = None):
     """Stream chat response from OpenAI"""
     try:
-        print(f"[DEBUG] Saving user message for conversation {conversation_id}")
         await save_message(conversation_id, "user", user_message, image_url)
-       
-        print(f"[DEBUG] Getting conversation history")
         history = await get_conversation_history(conversation_id)
-        print(f"[DEBUG] History has {len(history)} messages")
     
         messages = [
             {"role": "system", "content": "You are a helpful assistant."}
         ] + history
         
-        print(f"[DEBUG] Calling OpenAI with model: {model}")
         full_response = ""
         stream = await client.chat.completions.create(
             model=model,
@@ -154,23 +146,17 @@ async def stream_chat_response(conversation_id: int, user_message: str, model: s
             temperature=0.7,
         )
         
-        print(f"[DEBUG] Starting to stream response")
         async for chunk in stream:
             if chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
                 full_response += content
                 yield f"data: {json.dumps({'content': content, 'done': False})}\n\n"
         
-        print(f"[DEBUG] Finished streaming. Saving assistant message")
         await save_message(conversation_id, "assistant", full_response)
-        
         yield f"data: {json.dumps({'content': '', 'done': True})}\n\n"
         
     except Exception as e:
         error_message = f"Error: {str(e)}"
-        print(f"[ERROR] {error_message}")
-        import traceback
-        traceback.print_exc()
         yield f"data: {json.dumps({'error': error_message, 'done': True})}\n\n"
 
 @app.post("/api/chat/stream")
@@ -193,37 +179,7 @@ async def chat_stream(request: ChatRequest):
         }
     )
 
-@app.post("/api/chat")
-async def chat(request: ChatRequest):
-    """Non-streaming chat endpoint (for testing)"""
-    try:
-        await save_message(request.conversation_id, "user", request.message, request.image_url)
-        
-        history = await get_conversation_history(request.conversation_id)
-        
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."}
-        ] + history
-        
-        if request.image_url:
-            model = request.model or "gpt-4o"
-        else:
-            model = request.model or MODEL
-            
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.7,
-        )
-        
-        assistant_message = response.choices[0].message.content
-        
-        await save_message(request.conversation_id, "assistant", assistant_message)
-        
-        return {"response": assistant_message}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 def get_code_executor(conversation_id: int) -> CodeExecutor:
     """Get or create a code executor for a conversation"""
@@ -238,7 +194,6 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
         
         # Load CSV if not already loaded
         if not executor.list_dataframes():
-            print(f"[DEBUG] Loading CSV from {csv_path}")
             success, result = executor.load_csv(csv_path, "df")
             
             if not success:
@@ -269,10 +224,7 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
         
         messages.extend(history)
         
-        print(f"[DEBUG] Calling OpenAI for data analysis with model: {model}")
-        
         # First LLM call - generate analysis and code
-        # Collect full response first (no streaming)
         response = await client.chat.completions.create(
             model=model,
             messages=messages,
@@ -280,14 +232,11 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
         )
         
         full_response = response.choices[0].message.content
-        print(f"[DEBUG] Got full response, length: {len(full_response)}")
         
         # Separate text and code
         separated = separate_text_and_code(full_response)
         explanatory_text = separated['text']
         code_blocks = separated['code_blocks']
-        
-        print(f"[DEBUG] Separated into text ({len(explanatory_text)} chars) and {len(code_blocks)} code blocks")
         
         # Stream only the explanatory text (not the code)
         if explanatory_text:
@@ -297,22 +246,14 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
                 chunk = explanatory_text[i:i+chunk_size]
                 yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
         
-        # Execute code blocks (already extracted above)
-        print(f"[DEBUG] Found {len(code_blocks)} code blocks to execute")
-        
+        # Execute code blocks
         all_plots = []  # Collect all plots for saving
         execution_results = []  # Collect execution outputs for follow-up interpretation
         
         if code_blocks:
-            # Don't show "Executing code..." message, just execute silently
-            
             retry_count = 0
             for i, code in enumerate(code_blocks):
-                print(f"[DEBUG] Executing code block {i+1}:")
-                print(f"[DEBUG] Code:\n{code[:200]}...")
-                
                 result = executor.execute_code(code)
-                print(f"[DEBUG] Execution result: success={result['success']}, plots={len(result['plots'])}")
                 
                 # Collect execution output for follow-up
                 if result['success'] and result['stdout']:
@@ -342,8 +283,6 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
                 # If code failed and should retry
                 if not result['success'] and should_retry_code(result['error'], retry_count, max_retries):
                     retry_count += 1
-                    print(f"[DEBUG] Retrying failed code (attempt {retry_count})")
-                    
                     retry_prompt = create_retry_prompt(user_message, code, result['error'])
                     yield f"data: {json.dumps({'content': '\\n\\n🔄 **Attempting to fix the error...**\\n\\n', 'done': False})}\n\n"
                     
@@ -402,8 +341,6 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
         
         # If we have execution results but no plots, request a follow-up interpretation
         if execution_results and not all_plots:
-            print(f"[DEBUG] Requesting follow-up interpretation for execution results")
-            
             # Create follow-up prompt with execution results
             follow_up_prompt = f"""Based on the execution results above, please provide a clear interpretation and answer to the user's question.
 
@@ -438,16 +375,12 @@ Do not write any more code. Just interpret and explain the results."""
             full_response = f"{full_response}\n\n{interpretation_text}"
         
         # Save assistant response with plots
-        print(f"[DEBUG] Saving assistant message with {len(all_plots)} plots")
         await save_message(conversation_id, "assistant", full_response, plots=all_plots if all_plots else None)
         
         yield f"data: {json.dumps({'content': '', 'done': True})}\n\n"
         
     except Exception as e:
         error_message = f"Error: {str(e)}"
-        print(f"[ERROR] {error_message}")
-        import traceback
-        traceback.print_exc()
         yield f"data: {json.dumps({'error': error_message, 'done': True})}\n\n"
 
 @app.post("/api/csv-analysis/stream")
