@@ -15,6 +15,7 @@ from code_executor import CodeExecutor
 from data_analysis_agent import (
     DATA_ANALYSIS_SYSTEM_PROMPT,
     extract_python_code,
+    separate_text_and_code,
     format_execution_result,
     should_retry_code,
     create_retry_prompt
@@ -271,29 +272,39 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
         print(f"[DEBUG] Calling OpenAI for data analysis with model: {model}")
         
         # First LLM call - generate analysis and code
-        full_response = ""
-        stream = await client.chat.completions.create(
+        # Collect full response first (no streaming)
+        response = await client.chat.completions.create(
             model=model,
             messages=messages,
-            stream=True,
             temperature=0.7,
         )
         
-        async for chunk in stream:
-            if chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                full_response += content
-                yield f"data: {json.dumps({'content': content, 'done': False})}\n\n"
+        full_response = response.choices[0].message.content
+        print(f"[DEBUG] Got full response, length: {len(full_response)}")
         
-        # Extract and execute Python code
-        code_blocks = extract_python_code(full_response)
+        # Separate text and code
+        separated = separate_text_and_code(full_response)
+        explanatory_text = separated['text']
+        code_blocks = separated['code_blocks']
         
-        print(f"[DEBUG] Extracted {len(code_blocks)} code blocks")
+        print(f"[DEBUG] Separated into text ({len(explanatory_text)} chars) and {len(code_blocks)} code blocks")
+        
+        # Stream only the explanatory text (not the code)
+        if explanatory_text:
+            # Stream in chunks for smooth display
+            chunk_size = 50
+            for i in range(0, len(explanatory_text), chunk_size):
+                chunk = explanatory_text[i:i+chunk_size]
+                yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+        
+        # Execute code blocks (already extracted above)
+        print(f"[DEBUG] Found {len(code_blocks)} code blocks to execute")
         
         all_plots = []  # Collect all plots for saving
+        execution_results = []  # Collect execution outputs for follow-up interpretation
         
         if code_blocks:
-            yield f"data: {json.dumps({'content': '\\n\\n🔧 **Executing code...**\\n\\n', 'done': False})}\n\n"
+            # Don't show "Executing code..." message, just execute silently
             
             retry_count = 0
             for i, code in enumerate(code_blocks):
@@ -303,10 +314,19 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
                 result = executor.execute_code(code)
                 print(f"[DEBUG] Execution result: success={result['success']}, plots={len(result['plots'])}")
                 
-                formatted_result = format_execution_result(result)
+                # Collect execution output for follow-up
+                if result['success'] and result['stdout']:
+                    execution_results.append(result['stdout'])
                 
-                # Send execution result
-                yield f"data: {json.dumps({'content': formatted_result, 'done': False})}\n\n"
+                # Only show stdout (not the code or "Code executed" message)
+                if result['success'] and result['stdout']:
+                    # Format stdout nicely
+                    output_msg = f"\n\n{result['stdout']}\n"
+                    yield f"data: {json.dumps({'content': output_msg, 'done': False})}\n\n"
+                elif not result['success']:
+                    # Only show errors if execution failed
+                    error_msg = f"\n\n❌ **Error during execution:**\n```\n{result['error']}\n```\n"
+                    yield f"data: {json.dumps({'content': error_msg, 'done': False})}\n\n"
                 
                 # Send plots as base64 images and collect them
                 if result['plots']:
@@ -331,27 +351,42 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
                     messages.append({"role": "assistant", "content": full_response})
                     messages.append({"role": "user", "content": retry_prompt})
                     
-                    retry_response = ""
-                    retry_stream = await client.chat.completions.create(
+                    # Get retry response (no streaming)
+                    retry_response_obj = await client.chat.completions.create(
                         model=model,
                         messages=messages,
-                        stream=True,
                         temperature=0.7,
                     )
                     
-                    async for chunk in retry_stream:
-                        if chunk.choices[0].delta.content:
-                            content = chunk.choices[0].delta.content
-                            retry_response += content
-                            yield f"data: {json.dumps({'content': content, 'done': False})}\n\n"
+                    retry_response = retry_response_obj.choices[0].message.content
+                    
+                    # Separate retry text and code
+                    retry_separated = separate_text_and_code(retry_response)
+                    retry_text = retry_separated['text']
+                    retry_code_blocks = retry_separated['code_blocks']
+                    
+                    # Stream only explanatory text
+                    if retry_text:
+                        for i in range(0, len(retry_text), 50):
+                            chunk = retry_text[i:i+50]
+                            yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
                     
                     # Execute retry code
-                    retry_code_blocks = extract_python_code(retry_response)
                     if retry_code_blocks:
                         for retry_code in retry_code_blocks:
                             retry_result = executor.execute_code(retry_code)
-                            retry_formatted = format_execution_result(retry_result)
-                            yield f"data: {json.dumps({'content': retry_formatted, 'done': False})}\n\n"
+                            
+                            # Collect retry execution output
+                            if retry_result['success'] and retry_result['stdout']:
+                                execution_results.append(retry_result['stdout'])
+                            
+                            # Only show stdout (not the code)
+                            if retry_result['success'] and retry_result['stdout']:
+                                output_msg = f"\n\n{retry_result['stdout']}\n"
+                                yield f"data: {json.dumps({'content': output_msg, 'done': False})}\n\n"
+                            elif not retry_result['success']:
+                                error_msg = f"\n\n❌ **Error during execution:**\n```\n{retry_result['error']}\n```\n"
+                                yield f"data: {json.dumps({'content': error_msg, 'done': False})}\n\n"
                             
                             if retry_result['plots']:
                                 all_plots.extend(retry_result['plots'])  # Collect retry plots
@@ -364,6 +399,43 @@ async def stream_csv_analysis_response(conversation_id: int, user_message: str, 
                                     yield f"data: {json.dumps(plot_data)}\n\n"
                     
                     full_response = retry_response
+        
+        # If we have execution results but no plots, request a follow-up interpretation
+        if execution_results and not all_plots:
+            print(f"[DEBUG] Requesting follow-up interpretation for execution results")
+            
+            # Create follow-up prompt with execution results
+            follow_up_prompt = f"""Based on the execution results above, please provide a clear interpretation and answer to the user's question.
+
+Execution Output:
+{chr(10).join(execution_results)}
+
+Please provide a concise, direct answer that interprets these results in the context of the user's original question: "{user_message}"
+Do not write any more code. Just interpret and explain the results."""
+            
+            messages.append({"role": "assistant", "content": full_response})
+            messages.append({"role": "system", "content": follow_up_prompt})
+            
+            # Get interpretation response (stream it)
+            interpretation_stream = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.7,
+                stream=True,
+            )
+            
+            # Add separator before interpretation
+            yield f"data: {json.dumps({'content': '\\n\\n', 'done': False})}\n\n"
+            
+            interpretation_text = ""
+            async for chunk in interpretation_stream:
+                if chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    interpretation_text += content
+                    yield f"data: {json.dumps({'content': content, 'done': False})}\n\n"
+            
+            # Update full_response to include the interpretation
+            full_response = f"{full_response}\n\n{interpretation_text}"
         
         # Save assistant response with plots
         print(f"[DEBUG] Saving assistant message with {len(all_plots)} plots")

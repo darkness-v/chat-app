@@ -14,6 +14,7 @@ export default function ChatMessage({ message, plots }: ChatMessageProps) {
   const timestamp = format(new Date(message.timestamp), 'HH:mm');
 
   // Format message content with code blocks
+  // Note: Code blocks with 'python' or 'py' language are hidden (executed in background)
   const formatContent = (content: string) => {
     // Split by code blocks
     const parts = content.split(/(```[\s\S]*?```)/g);
@@ -22,8 +23,16 @@ export default function ChatMessage({ message, plots }: ChatMessageProps) {
       if (part.startsWith('```')) {
         // Extract code and language
         const lines = part.split('\n');
-        const firstLine = lines[0].replace('```', '');
+        const firstLine = lines[0].replace('```', '').trim().toLowerCase();
         const code = lines.slice(1, -1).join('\n');
+        
+        // Hide Python code blocks (they're executed in background)
+        if (firstLine === 'python' || firstLine === 'py' || firstLine === '') {
+          // Don't render Python code blocks for assistant messages
+          if (!isUser) {
+            return null;
+          }
+        }
         
         return (
           <pre key={index} className="bg-gray-800 text-gray-100 p-3 rounded my-2 overflow-x-auto text-sm">

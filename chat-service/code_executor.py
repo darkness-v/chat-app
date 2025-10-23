@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
+import seaborn as sns
 import io
 import sys
 import base64
@@ -95,6 +96,7 @@ class CodeExecutor:
             'pd': pd,
             'np': np,
             'plt': plt,
+            'sns': sns,
             'print': print,
             '__builtins__': __builtins__,
         }
