@@ -142,6 +142,36 @@ async def upload_image(
     image_url = f"/uploads/{unique_filename}"
     return {"image_url": image_url}
 
+@app.post("/api/upload-csv")
+async def upload_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload a CSV file for data analysis"""
+    # Validate file type
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="File must be a CSV file")
+    
+    # Generate unique filename
+    unique_filename = f"{uuid.uuid4()}.csv"
+    file_path = UPLOAD_DIR / unique_filename
+    
+    # Save file
+    try:
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving file: {str(e)}")
+    
+    # Return file path (absolute path for code executor)
+    csv_path = str(file_path.absolute())
+    csv_url = f"/uploads/{unique_filename}"
+    return {
+        "csv_path": csv_path,
+        "csv_url": csv_url,
+        "filename": file.filename
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8002)

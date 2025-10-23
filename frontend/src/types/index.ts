@@ -3,7 +3,8 @@ export interface Message {
   conversation_id: number;
   role: 'user' | 'assistant';
   content: string;
-  image_url?: string;  
+  image_url?: string;
+  plots?: string[];  // Base64 encoded plots
   timestamp: string;
 }
 

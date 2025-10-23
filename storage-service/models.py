@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, create_engine
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, create_engine, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -23,6 +23,7 @@ class Message(Base):
     role = Column(String(50), nullable=False)
     content = Column(Text, nullable=False)
     image_url = Column(String(500), nullable=True)
+    plots = Column(JSON, nullable=True)  # Store base64 encoded plots
     timestamp = Column(DateTime, default=datetime.utcnow)
     
     conversation = relationship("Conversation", back_populates="messages")

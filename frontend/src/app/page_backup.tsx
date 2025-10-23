@@ -56,15 +56,6 @@ export default function Home() {
       const response = await fetch(`${STORAGE_SERVICE_URL}/api/conversations/${convId}/messages`);
       const data = await response.json();
       setMessages(data);
-      
-      // Load plots from messages into messagePlots state
-      const plots: Record<number, string[]> = {};
-      data.forEach((msg: Message) => {
-        if (msg.plots && msg.plots.length > 0) {
-          plots[msg.id] = msg.plots;
-        }
-      });
-      setMessagePlots(plots);
     } catch (error) {
       console.error('Error loading messages:', error);
     }
@@ -181,7 +172,6 @@ export default function Home() {
                     [assistantMessage.id]: plots
                   }));
                 }
-                // Reload messages to get the saved version with plots
                 await loadMessages(conversationId);
                 break;
               }

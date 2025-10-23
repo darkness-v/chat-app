@@ -6,6 +6,7 @@ class MessageBase(BaseModel):
     role: str
     content: str
     image_url: Optional[str] = None
+    plots: Optional[List[str]] = None  # Base64 encoded plots
 
 class MessageCreate(MessageBase):
     pass
