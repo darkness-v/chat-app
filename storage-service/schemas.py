@@ -7,9 +7,13 @@ class MessageBase(BaseModel):
     content: str
     image_url: Optional[str] = None
     plots: Optional[List[str]] = None  # Base64 encoded plots
+    feedback: Optional[str] = None  # 'like', 'dislike', or None
 
 class MessageCreate(MessageBase):
     pass
+
+class MessageFeedbackUpdate(BaseModel):
+    feedback: Optional[str] = None  # 'like', 'dislike', or None
 
 class Message(MessageBase):
     id: int

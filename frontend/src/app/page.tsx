@@ -152,6 +152,25 @@ export default function Home() {
     }
   };
 
+  const handleFeedback = async (messageId: number, feedback: 'like' | 'dislike' | null) => {
+    try {
+      await fetch(`${STORAGE_SERVICE_URL}/api/messages/${messageId}/feedback`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback }),
+      });
+      
+      // Update local state
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId ? { ...msg, feedback } : msg
+        )
+      );
+    } catch (error) {
+      console.error('Error updating feedback:', error);
+    }
+  };
+
   const handleCSVUpload = (path: string, filename: string) => {
     setCsvPath(path);
     setCsvFilename(filename);
@@ -511,6 +530,7 @@ export default function Home() {
                 key={message.id} 
                 message={message} 
                 plots={messagePlots[message.id]}
+                onFeedback={handleFeedback}
               />
             ))}
             {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (

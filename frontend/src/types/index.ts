@@ -6,6 +6,7 @@ export interface Message {
   image_url?: string;
   plots?: string[];  // Base64 encoded plots
   timestamp: string;
+  feedback?: 'like' | 'dislike' | null;  // User feedback on assistant messages
 }
 
 export interface Conversation {

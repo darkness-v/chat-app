@@ -166,6 +166,32 @@ def update_conversation(
     db.refresh(db_conversation)
     return db_conversation
 
+@app.patch("/api/messages/{message_id}/feedback", response_model=schemas.Message)
+def update_message_feedback(
+    message_id: int,
+    feedback_update: schemas.MessageFeedbackUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update feedback (like/dislike) for a message"""
+    db_message = db.query(models.Message).filter(
+        models.Message.id == message_id
+    ).first()
+    if not db_message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    # Only allow feedback on assistant messages
+    if db_message.role != "assistant":
+        raise HTTPException(status_code=400, detail="Feedback can only be added to assistant messages")
+    
+    # Validate feedback value
+    if feedback_update.feedback not in [None, "like", "dislike"]:
+        raise HTTPException(status_code=400, detail="Feedback must be 'like', 'dislike', or null")
+    
+    db_message.feedback = feedback_update.feedback
+    db.commit()
+    db.refresh(db_message)
+    return db_message
+
 @app.post("/api/upload-image")
 async def upload_image(
     file: UploadFile = File(...),

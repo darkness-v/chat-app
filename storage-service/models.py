@@ -29,5 +29,6 @@ class Message(Base):
     image_url = Column(String(500), nullable=True)
     plots = Column(JSON, nullable=True)  # Store base64 encoded plots
     timestamp = Column(DateTime, default=utcnow)
+    feedback = Column(String(20), nullable=True)  # 'like', 'dislike', or None
     
     conversation = relationship("Conversation", back_populates="messages")
