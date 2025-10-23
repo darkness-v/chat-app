@@ -1,23 +1,37 @@
 # Lightweight Multi-Turn Chat Application
 
-A microservice-based chat application with persistent conversation history, streaming support, and **image chat capability**.
+A microservice-based chat application with persistent conversation history, streaming support, and **ChatGPT-like conversation management**.
+
+## 🆕 NEW: Conversation Management (October 2025)
+Your app now has a **sidebar with conversation list**! Just like ChatGPT, you can:
+- 📝 Create multiple conversations
+- 🔄 Switch between conversations
+- 🗑️ Delete old conversations
+- ✨ Auto-generated titles from first message
+- 📱 Mobile-responsive sidebar
+
+**[→ Quick Start Guide](./CONVERSATION_QUICKSTART.md)** | **[→ Full Documentation](./DOCS_INDEX_CONVERSATIONS.md)**
 
 ## Architecture
 
 ### Services
 1. **Chat Service** (Port 8001) - Handles AI chat interactions, streaming, and vision API
 2. **Storage Service** (Port 8002) - Manages conversation persistence and image uploads
-3. **Frontend Service** (Port 3000) - React/Next.js UI
+3. **Frontend Service** (Port 3000) - React/Next.js UI with conversation sidebar
 
 ## Features
+- ✅ **Multi-conversation management (NEW!)**
+- ✅ **Conversation sidebar with list (NEW!)**
+- ✅ **Auto-generated titles (NEW!)**
 - ✅ Multi-turn conversation history
 - ✅ Message persistence with timestamps
 - ✅ Streaming responses with loading states
 - ✅ User/Assistant message differentiation
 - ✅ **Image upload and chat (PNG/JPG/JPEG)**
+- ✅ **CSV data analysis with plots**
 - ✅ **Image preview in conversation**
 - ✅ **GPT-4 Vision integration**
-- ✅ Clean, modern UI
+- ✅ Clean, modern UI with responsive design
 
 ## Tech Stack
 - **Backend**: FastAPI, SQLAlchemy, SQLite, UV (package manager)

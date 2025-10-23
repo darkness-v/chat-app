@@ -1,17 +1,21 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, create_engine, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 
 Base = declarative_base()
+
+def utcnow():
+    """Return current UTC time as timezone-aware datetime"""
+    return datetime.now(timezone.utc)
 
 class Conversation(Base):
     __tablename__ = "conversations"
     
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), default="New Conversation")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
     
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
 
@@ -24,6 +28,6 @@ class Message(Base):
     content = Column(Text, nullable=False)
     image_url = Column(String(500), nullable=True)
     plots = Column(JSON, nullable=True)  # Store base64 encoded plots
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utcnow)
     
     conversation = relationship("Conversation", back_populates="messages")

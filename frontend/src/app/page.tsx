@@ -4,12 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
 import CSVUpload from '@/components/CSVUpload';
-import { Message } from '@/types';
+import Sidebar from '@/components/Sidebar';
+import { Message, Conversation } from '@/types';
 
 const CHAT_SERVICE_URL = process.env.NEXT_PUBLIC_CHAT_SERVICE_URL || 'http://localhost:8001';
 const STORAGE_SERVICE_URL = process.env.NEXT_PUBLIC_STORAGE_SERVICE_URL || 'http://localhost:8002';
 
 export default function Home() {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -18,7 +20,9 @@ export default function Home() {
   const [csvPath, setCsvPath] = useState<string | null>(null);
   const [csvFilename, setCsvFilename] = useState<string | null>(null);
   const [messagePlots, setMessagePlots] = useState<Record<number, string[]>>({});
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const firstMessageSentRef = useRef(false);
 
   // Auto-scroll to bottom
   const scrollToBottom = () => {
@@ -29,27 +33,105 @@ export default function Home() {
     scrollToBottom();
   }, [messages]);
 
-  // Initialize conversation
+  // Load all conversations on mount
   useEffect(() => {
-    const initConversation = async () => {
-      try {
-        const response = await fetch(`${STORAGE_SERVICE_URL}/api/conversations`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: 'New Conversation' }),
-        });
-        const data = await response.json();
-        setConversationId(data.id);
-        
-        // Load existing messages
-        await loadMessages(data.id);
-      } catch (error) {
-        console.error('Error initializing conversation:', error);
-      }
-    };
-
-    initConversation();
+    loadConversations();
   }, []);
+
+  const loadConversations = async () => {
+    try {
+      const response = await fetch(`${STORAGE_SERVICE_URL}/api/conversations`);
+      const data = await response.json();
+      setConversations(data);
+      
+      // If no conversations, create a new one
+      if (data.length === 0) {
+        await createNewConversation();
+      } else {
+        // Load the most recent conversation
+        const mostRecent = data[0];
+        await loadConversation(mostRecent.id);
+      }
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    }
+  };
+
+  const createNewConversation = async () => {
+    try {
+      const response = await fetch(`${STORAGE_SERVICE_URL}/api/conversations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'New Conversation' }),
+      });
+      const newConv = await response.json();
+      
+      setConversations((prev) => [newConv, ...prev]);
+      setConversationId(newConv.id);
+      setMessages([]);
+      setCsvMode(false);
+      setCsvPath(null);
+      setCsvFilename(null);
+      setMessagePlots({});
+      firstMessageSentRef.current = false;
+      setSidebarOpen(false); // Close sidebar on mobile
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+    }
+  };
+
+  const loadConversation = async (convId: number) => {
+    try {
+      setConversationId(convId);
+      await loadMessages(convId);
+      setCsvMode(false);
+      setCsvPath(null);
+      setCsvFilename(null);
+      setSidebarOpen(false); // Close sidebar on mobile
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+    }
+  };
+
+  const deleteConversation = async (convId: number) => {
+    try {
+      await fetch(`${STORAGE_SERVICE_URL}/api/conversations/${convId}`, {
+        method: 'DELETE',
+      });
+      
+      const remainingConversations = conversations.filter((c) => c.id !== convId);
+      setConversations(remainingConversations);
+      
+      // If deleted current conversation, handle appropriately
+      if (convId === conversationId) {
+        if (remainingConversations.length > 0) {
+          // Load the most recent remaining conversation
+          await loadConversation(remainingConversations[0].id);
+        } else {
+          // No conversations left, create a new one
+          await createNewConversation();
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+    }
+  };
+
+  const updateConversationTitle = async (convId: number, title: string) => {
+    try {
+      await fetch(`${STORAGE_SERVICE_URL}/api/conversations/${convId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title } : c))
+      );
+    } catch (error) {
+      console.error('Error updating conversation title:', error);
+    }
+  };
 
   const loadMessages = async (convId: number) => {
     try {
@@ -115,6 +197,13 @@ export default function Home() {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
     setIsStreaming(true);
+
+    // Auto-generate title from first message
+    if (!firstMessageSentRef.current) {
+      firstMessageSentRef.current = true;
+      const title = content.trim().slice(0, 50) + (content.length > 50 ? '...' : '');
+      await updateConversationTitle(conversationId, title);
+    }
 
     try {
       const response = await fetch(`${CHAT_SERVICE_URL}/api/csv-analysis/stream`, {
@@ -272,6 +361,13 @@ export default function Home() {
     setIsLoading(true);
     setIsStreaming(true);
 
+    // Auto-generate title from first message
+    if (!firstMessageSentRef.current && content.trim()) {
+      firstMessageSentRef.current = true;
+      const title = content.trim().slice(0, 50) + (content.length > 50 ? '...' : '');
+      await updateConversationTitle(conversationId, title);
+    }
+
     try {
       const response = await fetch(`${CHAT_SERVICE_URL}/api/chat/stream`, {
         method: 'POST',
@@ -360,69 +456,83 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-gray-50">
-      <div className="w-full max-w-4xl h-[90vh] bg-white rounded-lg shadow-xl flex flex-col">
-        {/* Header */}
-        <div className="bg-primary text-white p-4 rounded-t-lg">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold">Chat Application</h1>
-              <p className="text-sm text-blue-100">
-                {csvMode ? `📊 CSV Analysis: ${csvFilename}` : 'Multi-turn conversation with AI'}
-              </p>
+    <main className="flex h-screen bg-gray-50">
+      {/* Sidebar */}
+      <Sidebar
+        conversations={conversations}
+        currentConversationId={conversationId}
+        onSelectConversation={loadConversation}
+        onNewConversation={createNewConversation}
+        onDeleteConversation={deleteConversation}
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+      />
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        <div className="w-full max-w-5xl mx-auto h-full bg-white shadow-xl flex flex-col">
+          {/* Header */}
+          <div className="bg-primary text-white p-4">
+            <div className="flex justify-between items-center">
+              <div className="flex-1 ml-0 md:ml-0">
+                <h1 className="text-2xl font-bold">Chat Application</h1>
+                <p className="text-sm text-blue-100">
+                  {csvMode ? `📊 CSV Analysis: ${csvFilename}` : 'Multi-turn conversation with AI'}
+                </p>
+              </div>
+              {csvMode && (
+                <button
+                  onClick={handleClearCSV}
+                  className="px-3 py-1 bg-red-500 hover:bg-red-600 rounded text-sm transition-colors"
+                >
+                  Clear CSV
+                </button>
+              )}
             </div>
-            {csvMode && (
-              <button
-                onClick={handleClearCSV}
-                className="px-3 py-1 bg-red-500 hover:bg-red-600 rounded text-sm"
-              >
-                Clear CSV
-              </button>
-            )}
           </div>
-        </div>
 
-        {/* CSV Upload Section */}
-        {!csvMode && conversationId && (
-          <div className="p-4 border-b">
-            <CSVUpload onUpload={handleCSVUpload} disabled={isLoading} />
-          </div>
-        )}
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 && (
-            <div className="text-center text-gray-400 mt-10">
-              <p className="text-lg">Start a conversation!</p>
-              <p className="text-sm mt-2">Upload a CSV file for data analysis or chat normally</p>
+          {/* CSV Upload Section */}
+          {!csvMode && conversationId && (
+            <div className="p-4 border-b">
+              <CSVUpload onUpload={handleCSVUpload} disabled={isLoading} />
             </div>
           )}
-          {messages.map((message) => (
-            <ChatMessage 
-              key={message.id} 
-              message={message} 
-              plots={messagePlots[message.id]}
-            />
-          ))}
-          {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-            <div className="flex items-start space-x-3">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
-                AI
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.length === 0 && (
+              <div className="text-center text-gray-400 mt-10">
+                <p className="text-lg">Start a conversation!</p>
+                <p className="text-sm mt-2">Upload a CSV file for data analysis or chat normally</p>
               </div>
-              <div className="flex-1 bg-gray-100 rounded-lg p-4">
-                <div className="flex space-x-2">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            )}
+            {messages.map((message) => (
+              <ChatMessage 
+                key={message.id} 
+                message={message} 
+                plots={messagePlots[message.id]}
+              />
+            ))}
+            {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
+              <div className="flex items-start space-x-3">
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
+                  AI
+                </div>
+                <div className="flex-1 bg-gray-100 rounded-lg p-4">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
 
-        {/* Input */}
-        <ChatInput onSend={handleSendMessage} disabled={isLoading || !conversationId} />
+          {/* Input */}
+          <ChatInput onSend={handleSendMessage} disabled={isLoading || !conversationId} />
+        </div>
       </div>
     </main>
   );

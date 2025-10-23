@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from datetime import datetime
+from pydantic import BaseModel, ConfigDict, field_serializer
+from datetime import datetime, timezone
 from typing import List, Optional
 
 class MessageBase(BaseModel):
@@ -16,8 +16,14 @@ class Message(MessageBase):
     conversation_id: int
     timestamp: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+    
+    @field_serializer('timestamp')
+    def serialize_timestamp(self, dt: datetime, _info) -> str:
+        """Ensure timestamp is UTC and has 'Z' suffix"""
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat().replace('+00:00', 'Z')
 
 class ConversationBase(BaseModel):
     title: Optional[str] = "New Conversation"
@@ -25,16 +31,24 @@ class ConversationBase(BaseModel):
 class ConversationCreate(ConversationBase):
     pass
 
+class ConversationUpdate(BaseModel):
+    title: Optional[str] = None
+
 class Conversation(ConversationBase):
     id: int
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+    
+    @field_serializer('created_at', 'updated_at')
+    def serialize_datetime(self, dt: datetime, _info) -> str:
+        """Ensure datetime is UTC and has 'Z' suffix"""
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat().replace('+00:00', 'Z')
 
 class ConversationWithMessages(Conversation):
     messages: List[Message] = []
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,13 +1,15 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import shutil
 from pathlib import Path
 import uuid
+import json
 
 import models
 import schemas
@@ -18,7 +20,34 @@ init_db()
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-app = FastAPI(title="Storage Service", version="1.0.0")
+# Custom JSON encoder to ensure UTC timestamps have 'Z' suffix
+class CustomJSONResponse(JSONResponse):
+    def render(self, content) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+            default=self.custom_encoder,
+        ).encode("utf-8")
+    
+    @staticmethod
+    def custom_encoder(obj):
+        if isinstance(obj, datetime):
+            # Ensure timezone-aware datetime
+            if obj.tzinfo is None:
+                # If naive, assume UTC
+                obj = obj.replace(tzinfo=timezone.utc)
+            # Return ISO format with 'Z' for UTC
+            return obj.isoformat().replace('+00:00', 'Z')
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+app = FastAPI(
+    title="Storage Service", 
+    version="1.0.0",
+    default_response_class=CustomJSONResponse
+)
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -86,7 +115,7 @@ def add_message(
     )
     db.add(db_message)
     
-    conversation.updated_at = datetime.utcnow()
+    conversation.updated_at = datetime.now(timezone.utc)
     
     db.commit()
     db.refresh(db_message)
@@ -116,6 +145,26 @@ def delete_conversation(
     db.delete(conversation)
     db.commit()
     return {"message": "Conversation deleted"}
+
+@app.patch("/api/conversations/{conversation_id}")
+def update_conversation(
+    conversation_id: int,
+    conversation: schemas.ConversationUpdate,
+    db: Session = Depends(get_db)
+):
+    db_conversation = db.query(models.Conversation).filter(
+        models.Conversation.id == conversation_id
+    ).first()
+    if not db_conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    if conversation.title is not None:
+        db_conversation.title = conversation.title
+    
+    db_conversation.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(db_conversation)
+    return db_conversation
 
 @app.post("/api/upload-image")
 async def upload_image(
