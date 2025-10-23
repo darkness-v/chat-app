@@ -37,13 +37,16 @@ A production-ready microservice-based chat application with persistent conversat
 # Navigate to the project
 cd chat-app
 
-# Run setup script
-./setup.sh
-
 # Update your OpenAI API key
 nano chat-service/.env
 # or
 code chat-service/.env
+
+# Run setup script
+./setup.sh
+
+# Set up Virtual Environment for each services
+./setup-uv.sh
 
 # Start all services
 ./start-services.sh
